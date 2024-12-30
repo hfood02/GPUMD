@@ -195,13 +195,26 @@ void Fitness::compute(Parameters& para)
         true,
         1);
     }
+    float mse_energy;
+    float mse_force;
+    float mse_virial;
+    int count;
     for (int step = 0; step < maximum_generation; ++step) {
       int batch_id = step % num_batches;
       int Nc = train_set[batch_id][0].Nc;
+      if (batch_id == 0) {
+        mse_energy = 0.0f;
+        mse_force = 0.0f;
+        mse_virial = 0.0f;
+        count = 0;
+      }
       // printf("Finding force for batch %d\n", batch_id);
       // bool calculate_neighbor = (num_batches > 1) || (step % 100 == 0);
       gpu_gradients.fill(0.0f);
       update_learning_rate(lr, step, Nc);
+      para.lambda_e = 1.0f + (0.02f - 1.0f) * lr / start_lr;
+      para.lambda_f = 1.0f + (1000.0f - 1.0f) * lr / start_lr;
+      para.lambda_v = 1.0f + (50.0f - 1.0f) * lr / start_lr;
       potential->find_force(
       para,
       optimizer->get_parameters(),
@@ -225,13 +238,19 @@ void Fitness::compute(Parameters& para)
       //   std::cout << n << " " << gradients[n] << std::endl;
       // }
       // std::cout << std::endl;
+      float mse_energy_train = rmse_energy_array.back();
+      float mse_force_train = rmse_force_array.back();
+      float mse_virial_train = rmse_virial_array.back();
+      mse_energy += mse_energy_train * Nc;
+      mse_force += mse_force_train * Nc;
+      mse_virial += mse_virial_train * Nc;
+      count += Nc;
       optimizer->update(lr, gpu_gradients.data());
 
-      if ((step + 1) % 100 == 0) {
-      // if (1) {
-        float rmse_energy_train = rmse_energy_array.back();
-        float rmse_force_train = rmse_force_array.back();
-        float rmse_virial_train = rmse_virial_array.back();
+      if ((step + 1) % 1 == 0) {
+        float rmse_energy_train = sqrt(mse_energy / count);
+        float rmse_force_train = sqrt(mse_force / count);
+        float rmse_virial_train = sqrt(mse_virial / count);
         float total_loss_train = para.lambda_e * rmse_energy_train + para.lambda_f * rmse_force_train + para.lambda_v * rmse_virial_train;
         report_error(
           para,
@@ -284,11 +303,11 @@ void Fitness::update_learning_rate(float& lr, int step, int Nc) {
     decay_rate = exp(log(stop_lr / start_lr) / (maximum_generation / decay_step));
     lr = start_lr * pow(decay_rate, step / decay_step);
   }
-  // if (Nc > 1) {
-  //   real_lr = lr * sqrt(Nc);
-  // } else {
-  //   real_lr = lr;
-  // }
+  if (Nc > 1) {
+    real_lr = lr * sqrt(Nc);
+  } else {
+    real_lr = lr;
+  }
 }
 
 void Fitness::output(
@@ -307,7 +326,7 @@ void Fitness::output(
         data_nc += prediction[offset + m];
       }
       if (!is_stress) {
-        fprintf(fid, "%g ", data_nc / dataset.Na_cpu[nc]);
+        fprintf(fid, "%g ", data_nc);
       } else {
         fprintf(fid, "%g ", data_nc / dataset.structures[nc].volume * PRESSURE_UNIT_CONVERSION);
       }
@@ -445,9 +464,9 @@ void Fitness::report_error(
     auto rmse_energy_test_array = test_set[0].get_rmse_energy(para, false, false, 0);
     auto rmse_force_test_array = test_set[0].get_rmse_force(para, false, false, 0);
     auto rmse_virial_test_array = test_set[0].get_rmse_virial(para, false, false, 0);
-    rmse_energy_test = rmse_energy_test_array.back();
-    rmse_force_test = rmse_force_test_array.back();
-    rmse_virial_test = rmse_virial_test_array.back(); 
+    rmse_energy_test = sqrt(rmse_energy_test_array.back());
+    rmse_force_test = sqrt(rmse_force_test_array.back());
+    rmse_virial_test = sqrt(rmse_virial_test_array.back()); 
   }
 
   FILE* fid_nep = my_fopen("nep.txt", "w");
