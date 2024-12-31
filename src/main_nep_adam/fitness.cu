@@ -156,7 +156,7 @@ void Fitness::compute(Parameters& para)
 
     if (para.train_mode == 0 || para.train_mode == 3) {
       printf(
-        "%-8s%-11s%-13s%-13s%-13s%-13s%-13s%-13s%-14s\n",
+        "%-8s%-11s%-13s%-13s%-13s%-13s%-13s%-13s%-20s\n",
         "Step",
         "Total-Loss",
         "RMSE-E-Train",
@@ -168,7 +168,7 @@ void Fitness::compute(Parameters& para)
         "Learning-Rate");
     } else {
       printf(
-        "%-8s%-11s%-13s%-13s%-14s\n",
+        "%-8s%-11s%-13s%-13s%-20s\n",
         "Step",
         "Total-Loss",
         "RMSE-P-Train",
@@ -180,11 +180,12 @@ void Fitness::compute(Parameters& para)
   CHECK(cudaGetDeviceCount(&deviceCount));
 
   if (para.prediction == 0) {
-    std::vector<float> dummy_solution(para.number_of_variables, para.initial_para);
+    // std::vector<float> dummy_solution(para.number_of_variables, para.initial_para);
+    float* parameters = optimizer->get_parameters();
     for (int n = 0; n < num_batches; ++n) {
       potential->find_force(
         para,
-        dummy_solution.data(),
+        parameters,
         false,
         train_set[n],
 #ifdef USE_FIXED_SCALER
@@ -217,7 +218,7 @@ void Fitness::compute(Parameters& para)
       para.lambda_v = 1.0f + (50.0f - 1.0f) * lr / start_lr;
       potential->find_force(
       para,
-      optimizer->get_parameters(),
+      parameters,
       true,
       train_set[batch_id],
       false,
@@ -247,7 +248,7 @@ void Fitness::compute(Parameters& para)
       count += Nc;
       optimizer->update(lr, gpu_gradients.data());
 
-      if ((step + 1) % 1 == 0) {
+      if ((step + 1) % num_batches == 0) {
         float rmse_energy_train = sqrt(mse_energy / count);
         float rmse_force_train = sqrt(mse_force / count);
         float rmse_virial_train = sqrt(mse_virial / count);
@@ -488,7 +489,7 @@ void Fitness::report_error(
 
   if (para.train_mode == 0 || para.train_mode == 3) {
     printf(
-      "%-8d%-11.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-14.5f\n",
+      "%-8d%-11.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-20.7f\n",
       generation + 1,
       loss_total,
       rmse_energy_train,
@@ -500,7 +501,7 @@ void Fitness::report_error(
       lr);
     fprintf(
       fid_loss_out,
-      "%-8d%-11.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-14.5f\n",
+      "%-8d%-11.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-13.5f%-20.7f\n",
       generation + 1,
       loss_total,
       rmse_energy_train,
@@ -512,7 +513,7 @@ void Fitness::report_error(
       lr);
   } else {
     printf(
-      "%-8d%-11.5f%-13.5f%-13.5f%-14.5f\n",
+      "%-8d%-11.5f%-13.5f%-13.5f%-20.7f\n",
       generation + 1,
       loss_total,
       rmse_virial_train,
@@ -520,7 +521,7 @@ void Fitness::report_error(
       lr);
     fprintf(
       fid_loss_out,
-      "%-8d%-11.5f%-13.5f%-13.5f%-14.5f\n",
+      "%-8d%-11.5f%-13.5f%-13.5f%-20.7f\n",
       generation + 1,
       loss_total,
       rmse_virial_train,
