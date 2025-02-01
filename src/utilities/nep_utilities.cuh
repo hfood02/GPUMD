@@ -483,6 +483,42 @@ static __device__ __host__ __forceinline__ void find_fn_and_fnp(
   }
 }
 
+static __device__ __forceinline__ void find_fn_and_fnp(
+  const int N,
+  const int max_NN,
+  const int n_max,
+  const float rcinv,
+  const float d12,
+  const float fc12,
+  const float fcp12,
+  float* fn,
+  float* fnp)
+{
+  float d12_mul_rcinv = d12 * rcinv;
+  float x = 2.0 * (d12_mul_rcinv - 1.0) * (d12_mul_rcinv - 1.0) - 1.0;
+  fn[0] = fc12;
+  fnp[0] = fcp12;
+  fn[N * max_NN] = (x + 1.0) * 0.5 * fc12;
+  fnp[1] = 2.0 * (d12_mul_rcinv - 1.0) * rcinv * fc12 + (x + 1.0) * 0.5 * fcp12;
+  float u0 = 1.0;
+  float u1 = 2.0 * x;
+  float u2;
+  float fn_m_minus_2 = 1.0;
+  float fn_m_minus_1 = x;
+  for (int m = 2; m <= n_max; ++m) {
+    float fn_tmp1 = 2.0 * x * fn_m_minus_1 - fn_m_minus_2;
+    fn_m_minus_2 = fn_m_minus_1;
+    fn_m_minus_1 = fn_tmp1;
+    float fnp_tmp = m * u1;
+    u2 = 2.0 * x * u1 - u0;
+    u0 = u1;
+    u1 = u2;
+    float fn_tmp2 = (fn_tmp1 + 1.0) * 0.5;
+    fnp[m] = (fnp_tmp * 2.0 * (d12 * rcinv - 1.0) * rcinv) * fc12 + fn_tmp2 * fcp12;
+    fn[N * max_NN * m] = fn_tmp2 * fc12;
+  }
+}
+
 static __device__ __forceinline__ void get_f12_4body(
   const float d12,
   const float d12inv,
